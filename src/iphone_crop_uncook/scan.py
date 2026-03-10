@@ -71,11 +71,12 @@ def _process_batch(photos: list) -> tuple[int, int]:
     processed = 0
     failed = 0
     failed_dates = []
+    failures_log = config.OUTPUT_DIR / "failures.log"
 
     with ThreadPoolExecutor(max_workers=config.WORKERS) as pool:
         futures = {pool.submit(_process_one, p): p for p in photos}
 
-        with db.get_conn() as conn:
+        with db.get_conn() as conn, open(failures_log, "a") as flog:
             for future in tqdm(
                 as_completed(futures), total=len(futures), desc="Processing", unit="photo"
             ):
@@ -90,10 +91,12 @@ def _process_batch(photos: list) -> tuple[int, int]:
                     else:
                         failed += 1
                         failed_dates.append(photo.date)
-                except Exception:
+                        _log_failure(flog, photo, "export returned empty")
+                except Exception as exc:
                     log.exception("Error processing %s (%s)", photo.uuid, photo.original_filename)
                     failed += 1
                     failed_dates.append(photo.date)
+                    _log_failure(flog, photo, str(exc))
 
             # Set last_sync to just before the earliest failure so it gets retried.
             # If no failures, use current time.
@@ -103,7 +106,19 @@ def _process_batch(photos: list) -> tuple[int, int]:
                 sync_point = datetime.now(timezone.utc)
             db.set_last_sync(conn, sync_point)
 
+    if failed:
+        log.info("Failures written to %s", failures_log)
     return processed, failed
+
+
+def _log_failure(flog, photo, reason: str):
+    cloud = "cloud-only" if photo.path is None else "local"
+    flog.write(
+        f"{datetime.now(timezone.utc).isoformat()}\t"
+        f"{photo.uuid}\t{photo.original_filename}\t"
+        f"{photo.date.isoformat()}\t{cloud}\t{reason}\n"
+    )
+    flog.flush()
 
 
 def _process_one(photo) -> dict | None:
