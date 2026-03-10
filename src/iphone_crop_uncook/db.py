@@ -28,7 +28,7 @@ def create_tables(conn):
             uuid TEXT PRIMARY KEY,
             original_filename TEXT NOT NULL,
             exported_path TEXT NOT NULL,
-            is_edited INTEGER NOT NULL,
+            image_source TEXT NOT NULL,
             processed_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS sync_state (
@@ -43,12 +43,12 @@ def processed_uuids(conn) -> set[str]:
     return {r[0] for r in rows}
 
 
-def mark_processed(conn, uuid, original_filename, exported_path, is_edited):
+def mark_processed(conn, uuid, original_filename, exported_path, image_source):
     conn.execute(
         """INSERT OR REPLACE INTO processed_photos
-           (uuid, original_filename, exported_path, is_edited, processed_at)
+           (uuid, original_filename, exported_path, image_source, processed_at)
            VALUES (?, ?, ?, ?, ?)""",
-        (uuid, original_filename, exported_path, is_edited,
+        (uuid, original_filename, exported_path, image_source,
          datetime.now(timezone.utc).isoformat()),
     )
 

@@ -1,4 +1,4 @@
-"""Core pipeline: query Photos, process screenshots, export lossless PNGs."""
+"""Core pipeline: query Photos library, export screenshots, downloads, and shared content."""
 
 import json
 import logging
@@ -33,7 +33,7 @@ def main():
         done = db.processed_uuids(conn)
 
     to_process = _query_photos(done)
-    log.info("%d screenshots to process (%d already done)", len(to_process), len(done))
+    log.info("%d images to process (%d already done)", len(to_process), len(done))
 
     if not to_process:
         with db.get_conn() as conn:
@@ -45,8 +45,37 @@ def main():
     log.info("Done: %d processed, %d failed", processed, failed)
 
 
+def _is_photo(photo) -> bool:
+    """Real camera photos: has camera EXIF, or HEIC format (always a camera photo
+    even if messaging apps stripped the EXIF).
+    """
+    if photo.exif_info.camera_model is not None:
+        return True
+    if Path(photo.original_filename).suffix.lower() in (".heic", ".heif"):
+        return True
+    return False
+
+
+def _classify(photo) -> str | None:
+    """Classify a photo for the pipeline. Returns image_source or None to skip."""
+    if _is_photo(photo) and not photo.screenshot:
+        return None  # real photo (mine or friend's) — ignore
+
+    if photo.syndicated:
+        if photo.screenshot:
+            return "shared_screenshot"
+        return "shared"
+
+    if photo.screenshot:
+        if photo.hasadjustments:
+            return "cropped_screenshot"
+        return "screenshot"
+
+    return "download"
+
+
 def _query_photos(done: set[str]) -> list:
-    """Load Photos library and return unprocessed screenshots."""
+    """Load Photos library and return unprocessed screenshots, downloads, and shared content."""
     import osxphotos
 
     with db.get_conn() as conn:
@@ -63,7 +92,10 @@ def _query_photos(done: set[str]) -> list:
         log.info("Incremental sync: from_date=%s", last_sync.isoformat())
 
     all_photos = photosdb.photos(**kwargs)
-    return [p for p in all_photos if p.screenshot and p.uuid not in done]
+    return [
+        p for p in all_photos
+        if _classify(p) is not None and p.uuid not in done
+    ]
 
 
 def _process_batch(photos: list) -> tuple[int, int]:
@@ -123,12 +155,13 @@ def _log_failure(flog, photo, reason: str):
 
 def _process_one(photo) -> dict | None:
     """Process a single photo. Returns metadata dict for DB insertion."""
+    image_source = _classify(photo)
     output_path = _build_output_path(photo)
 
     # Skip export if the file already exists on disk
     if not output_path.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        if photo.hasadjustments:
+        if image_source == "cropped_screenshot":
             if not _export_uncooked(photo, output_path):
                 return None
         else:
@@ -139,7 +172,7 @@ def _process_one(photo) -> dict | None:
         "uuid": photo.uuid,
         "original_filename": photo.original_filename,
         "exported_path": str(output_path),
-        "is_edited": photo.hasadjustments,
+        "image_source": image_source,
     }
 
 
