@@ -128,7 +128,7 @@ def _process_one(photo) -> dict | None:
 def _export_original(photo, output_path: Path):
     """Export an unedited screenshot directly to the output path."""
     filename = output_path.stem + output_path.suffix
-    use_photos = photo.ismissing
+    use_photos = photo.path is None
     with _export_lock:
         exported = photo.export(
             str(output_path.parent), filename=filename,
@@ -144,7 +144,7 @@ def _export_uncooked(photo, output_path: Path) -> bool:
     filename = output_path.stem + output_path.suffix
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        use_photos = photo.ismissing
+        use_photos = photo.path is None
         if use_photos:
             # AppleScript path — must be serialized
             with _export_lock:
