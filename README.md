@@ -6,8 +6,6 @@ In the process, it uncooks cropped screenshots. When you crop a screenshot in Ap
 
 The output directory is designed to feed into [twitter-screenshot-search](https://github.com/wjmallard/twitter-screenshot-search) for OCR and full-text search.
 
-*Vibe-coded with Claude Code.*
-
 ## Setup
 
 ```

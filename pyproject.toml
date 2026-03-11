@@ -1,5 +1,5 @@
 [project]
-name = "iphone-crop-uncook"
+name = "sync-iphone-screenshots"
 version = "0.1.0"
 description = "Recover lossless PNG crops from iPhone screenshots that Apple Photos re-encoded as JPEG"
 requires-python = ">=3.12"
@@ -12,11 +12,11 @@ dependencies = [
 ]
 
 [project.scripts]
-scan = "iphone_crop_uncook.scan:main"
+scan = "sync_iphone_screenshots.scan:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/iphone_crop_uncook"]
+packages = ["src/sync_iphone_screenshots"]
