@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -98,8 +99,35 @@ def _query_photos(done: set[str]) -> list:
     ]
 
 
+def _ensure_photos_app(photos: list) -> None:
+    """Activate Photos.app if any photos require AppleScript export (cloud-only)."""
+    needs_photos = any(p.path is None for p in photos)
+    if not needs_photos:
+        return
+
+    log.info("Cloud-only photos detected — activating Photos.app...")
+    subprocess.run(
+        ["osascript", "-e", 'tell application "Photos" to activate'],
+        check=True,
+        timeout=30,
+    )
+    # Wait for Photos to finish launching before proceeding
+    subprocess.run(
+        ["osascript", "-e",
+         'tell application "System Events" to repeat 30 times\n'
+         '  if exists (process "Photos") then return\n'
+         '  delay 1\n'
+         'end repeat'],
+        check=True,
+        timeout=60,
+    )
+    log.info("Photos.app is ready.")
+
+
 def _process_batch(photos: list) -> tuple[int, int]:
     """Process photos in parallel, persist to DB. Returns (processed, failed)."""
+    _ensure_photos_app(photos)
+
     processed = 0
     failed = 0
     failed_dates = []
